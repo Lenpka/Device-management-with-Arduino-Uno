@@ -132,14 +132,26 @@
 
 ---
 
-## 10. Структура репозитория
+## 10. Интерфейсы Python
+
+| Файл | Назначение |
+|------|------------|
+| `gui_light.py` | Лёгкий GUI (tkinter), минимум зависимостей |
+| `gui_modern.py` | Современный GUI (CustomTkinter), тот же функционал |
+| `serial_controller.py` | Консольный клиент |
+| `arduino_client.py` | Общий Serial-клиент |
+
+## 11. Структура репозитория
 
 ```
 firmware/multi_channel_driver/
+python/arduino_client.py
+python/gui_light.py
+python/gui_modern.py
 python/serial_controller.py
 docs/PROJECT.md
 docs/PROTOCOL.md
 docs/WIRING.md
 ```
 
-Сборка: Arduino IDE 2.x, плата UNO. Python: `pip install -r python/requirements.txt`.
+Сборка: Arduino IDE 2.x, плата UNO. Python: `cd python && uv sync` (опционально `uv sync --group modern` для GUI CustomTkinter).

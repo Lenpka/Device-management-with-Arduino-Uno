@@ -1,0 +1,3 @@
+# Устарело: uv sync --group modern
+-r requirements.txt
+customtkinter>=5.2.0

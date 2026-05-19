@@ -1,74 +1,22 @@
 #!/usr/bin/env python3
 """
-Клиент управления 8 выходными каналами CH1..CH8 (Arduino UNO + ULN2803A).
+CLI-клиент выходных каналов CH1..CH8 (Arduino UNO + ULN2803A).
 Требования: pip install pyserial
 """
 
 from __future__ import annotations
 
 import argparse
+import os
 import sys
-import time
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 try:
-    import serial
+    from arduino_client import ArduinoChannelClient
 except ImportError:
-    print("Установите pyserial: pip install pyserial", file=sys.stderr)
+    print("Запускайте из каталога python/ или установите pyserial", file=sys.stderr)
     sys.exit(1)
-
-
-BAUD = 115200
-BOOT_DELAY_S = 2.0
-READ_TIMEOUT_S = 1.0
-
-
-class ArduinoChannelClient:
-    def __init__(self, port: str) -> None:
-        self._ser = serial.Serial(port, BAUD, timeout=READ_TIMEOUT_S)
-        time.sleep(BOOT_DELAY_S)
-        self._ser.reset_input_buffer()
-
-    def close(self) -> None:
-        self._ser.close()
-
-    def _send_line(self, line: str) -> list[str]:
-        payload = (line.strip() + "\n").encode("ascii")
-        self._ser.write(payload)
-        self._ser.flush()
-        replies: list[str] = []
-        deadline = time.monotonic() + READ_TIMEOUT_S
-        while time.monotonic() < deadline:
-            raw = self._ser.readline()
-            if not raw:
-                continue
-            text = raw.decode("ascii", errors="replace").strip()
-            if text:
-                replies.append(text)
-                if text.startswith("ACK") or text.startswith("ERR") or text.startswith("STAT"):
-                    break
-        return replies
-
-    def set_channel(self, channel: int, state: int) -> list[str]:
-        return self._send_line(f"SET {channel} {state}")
-
-    def set_frequency(self, channel: int, hz: int) -> list[str]:
-        return self._send_line(f"FREQ {channel} {hz}")
-
-    def set_pwm(self, channel: int, duty: int) -> list[str]:
-        return self._send_line(f"PWM {channel} {duty}")
-
-    def get_status(self) -> list[str]:
-        return self._send_line("GET")
-
-    def poll_status_loop(self, interval_s: float = 0.5) -> None:
-        print("Опрос логического STAT (Ctrl+C для выхода):")
-        try:
-            while True:
-                for line in self.get_status():
-                    print(line)
-                time.sleep(interval_s)
-        except KeyboardInterrupt:
-            print("\nОстановлено.")
 
 
 def main() -> None:
@@ -111,7 +59,16 @@ def main() -> None:
         elif args.action == "stat":
             replies = client.get_status()
         elif args.action == "monitor":
-            client.poll_status_loop()
+            import time
+
+            print("Опрос логического STAT (Ctrl+C для выхода):")
+            try:
+                while True:
+                    for line in client.get_status():
+                        print(line)
+                    time.sleep(0.5)
+            except KeyboardInterrupt:
+                print("\nОстановлено.")
             return
         else:
             replies = []

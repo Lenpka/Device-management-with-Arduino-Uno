@@ -30,15 +30,34 @@
 ## Быстрый старт
 1. Прошивка: `firmware/multi_channel_driver/` → Arduino UNO.
 2. Подключить IN1…IN8 к пинам из таблицы, GND общий, нагрузки на OUT1…OUT8.
-3. `pip install -r python/requirements.txt`
-4. Примеры:
+3. **Окружение Python ([uv](https://docs.astral.sh/uv/)):**
    ```bash
-   python python/serial_controller.py COM3 on 1
-   python python/serial_controller.py COM3 freq 1 2
-   python python/serial_controller.py COM3 pwm 5 128
-   python python/serial_controller.py COM3 stat
-   python python/serial_controller.py COM3 monitor
+   cd python
+   uv sync                  # pyserial + .venv (лёгкий GUI)
+   uv sync --group modern   # + customtkinter (современный GUI)
    ```
+4. **GUI** (одинаковый функционал: SET, FREQ, PWM, GET/STAT, автоопрос):
+   ```bash
+   cd python
+   uv run python gui_light.py      # tkinter, без группы modern
+   uv run python gui_modern.py     # после uv sync --group modern
+   ```
+5. **CLI:**
+   ```bash
+   cd python
+   uv run python serial_controller.py COM3 on 1
+   uv run python serial_controller.py COM3 freq 1 2
+   uv run python serial_controller.py COM3 pwm 5 128
+   uv run python serial_controller.py COM3 stat
+   uv run python serial_controller.py COM3 monitor
+   ```
+
+Без uv: `pip install -r python/requirements.txt` (см. комментарии в `requirements*.txt`).
+
+| Интерфейс | Зависимости | Нагрузка на ПК |
+|-----------|-------------|----------------|
+| `gui_light.py` | pyserial + tkinter | минимальная |
+| `gui_modern.py` | pyserial + customtkinter | умеренная |
 
 ## Документация
 - [Проект, стенд, архитектура](docs/PROJECT.md)

@@ -1,1 +1,4 @@
+# Устарело: используйте uv (см. README).
+# Базовые зависимости:  uv sync
+# + современный GUI:      uv sync --group modern
 pyserial>=3.5
