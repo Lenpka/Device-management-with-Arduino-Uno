@@ -154,4 +154,4 @@ docs/PROTOCOL.md
 docs/WIRING.md
 ```
 
-Сборка: Arduino IDE 2.x, плата UNO. Python: `cd python && uv sync` (опционально `uv sync --group modern` для GUI CustomTkinter).
+Сборка: Arduino IDE 2.x, плата UNO. Python на новом ПК: двойной щелчок **`START.bat`** в корне репозитория (установка uv, зависимостей и GUI). Вручную: `cd python && uv sync --group modern`.

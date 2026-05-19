@@ -27,7 +27,15 @@
 
 Полная таблица и схема канала: [docs/WIRING.md](docs/WIRING.md).
 
-## Быстрый старт
+## Запуск с одной кнопки (новый ПК)
+
+1. Один раз прошить Arduino: `firmware/multi_channel_driver/` (Arduino IDE).
+2. Подключить USB и стенд по [docs/WIRING.md](docs/WIRING.md).
+3. **Двойной щелчок** по файлу **`START.bat`** (Windows) или в терминале: `./START.sh` (Linux/macOS).
+
+Скрипт сам: установит **uv** (если нет), скачает Python при необходимости, создаст `.venv`, поставит зависимости и откроет GUI. Нужен только **интернет** при первом запуске.
+
+## Быстрый старт (вручную)
 1. Прошивка: `firmware/multi_channel_driver/` → Arduino UNO.
 2. Подключить IN1…IN8 к пинам из таблицы, GND общий, нагрузки на OUT1…OUT8.
 3. **Окружение Python ([uv](https://docs.astral.sh/uv/)):**
