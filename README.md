@@ -1,31 +1,52 @@
 # Многоканальное управление исполнительными устройствами (Arduino UNO + Python)
 
-Программно-аппаратный комплекс для дистанционного управления **восемью независимыми каналами** нагрузки: верхний уровень на **Python** (команды по USB Serial), микроконтроллер **Arduino UNO**, силовая коммутация — **8-канальный транзисторный драйвер ULN2803A** (ключи «на землю»).
+Программно-аппаратный комплекс: **Python** → USB Serial → **Arduino UNO** → **ULN2803A** (8 выходных каналов CH1…CH8, low-side) → **исполнительные устройства**.
+
+Базовый элемент — **выходной канал транзисторного драйвера**, не реле и не сеть 220 В.
 
 ## Возможности
-- статическое включение/выключение (`SET`);
-- частотное переключение (`FREQ`);
-- ШИМ на каналах с hardware PWM (`PWM`: каналы 2, 4, 5, 8);
-- телеметрия (`GET` → `STAT`).
+| Режим | Команда | Назначение |
+|-------|---------|------------|
+| Статика | `SET` | Постоянный логический уровень, все CH1…CH8 |
+| Меандр | `FREQ` | Программное переключение с заданной частотой, все CH1…CH8 |
+| ШИМ | `PWM` | `analogWrite()` — аппаратный PWM UNO на **CH2, CH4, CH5, CH6, CH7, CH8** |
+| Опрос логики | `GET` → `STAT` | Уровень на пине Arduino (**не** состояние нагрузки) |
+
+## Разводка (кратко)
+
+| CH | Arduino | ULN IN | PWM (UNO R3) | Стенд по умолчанию | Питание |
+|----|---------|--------|--------------|-------------------|---------|
+| CH1 | D2 | IN1 | нет | LED + R | 5 V, GND общий |
+| CH2 | D3 | IN2 | да | LED + R | 5 V |
+| CH3 | D4 | IN3 | нет | LED + R | 5 V |
+| CH4 | D5 | IN4 | да | LED + R | 5 V |
+| CH5 | D6 | IN5 | да | LED + R | 5 V |
+| CH6 | D11 | IN6 | да | LED + R | 5 V |
+| CH7 | D9 | IN7 | да | LED + R | 5 V |
+| CH8 | D10 | IN8 | да | LED + R | 5 V |
+
+Полная таблица и схема канала: [docs/WIRING.md](docs/WIRING.md).
 
 ## Быстрый старт
-1. Загрузить прошивку из `firmware/multi_channel_driver/` в Arduino UNO.
-2. Соединить IN1…IN8 драйвера с пинами D2…D9, общий GND с Arduino и источником нагрузок.
+1. Прошивка: `firmware/multi_channel_driver/` → Arduino UNO.
+2. Подключить IN1…IN8 к пинам из таблицы, GND общий, нагрузки на OUT1…OUT8.
 3. `pip install -r python/requirements.txt`
 4. Примеры:
    ```bash
    python python/serial_controller.py COM3 on 1
-   python python/serial_controller.py COM3 freq 2 5
+   python python/serial_controller.py COM3 freq 1 2
+   python python/serial_controller.py COM3 pwm 5 128
    python python/serial_controller.py COM3 stat
    python python/serial_controller.py COM3 monitor
    ```
 
 ## Документация
-- [Архитектура, компоненты, защита проекта](docs/PROJECT.md)
-- [Протокол Serial](docs/PROTOCOL.md)
+- [Проект, стенд, архитектура](docs/PROJECT.md)
+- [Протокол SET / FREQ / PWM / GET](docs/PROTOCOL.md)
+- [Разводка и режимы PWM vs FREQ](docs/WIRING.md)
 
 ## Авторы
 Студенты 2 курса бакалавриата факультета наук о материалах МГУ: Константинов Л., Гумиров И.
 
 ## Лицензия
-См. [LICENSE](LICENSE).
+[LICENSE](LICENSE)

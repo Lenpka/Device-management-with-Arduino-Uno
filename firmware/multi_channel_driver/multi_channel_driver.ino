@@ -1,13 +1,20 @@
 /*
- * 8-канальный драйвер нагрузок через ULN2803A
- * Arduino UNO — приём команд по Serial, телеметрия STAT
+ * 8 выходных каналов CH1..CH8 через ULN2803A (low-side)
+ * Разводка: docs/WIRING.md
  *
- * Канал 1..8 → пины D2..D9 (см. docs/PROJECT.md)
+ * SET  — статический логический уровень (digitalWrite)
+ * FREQ — программный меандр (millis), любой канал
+ * PWM  — аппаратный ШИМ (analogWrite), только пины ~3,5,6,9,10,11 на UNO R3
  */
 
 const uint8_t CHANNEL_COUNT = 8;
-const uint8_t PIN_MAP[CHANNEL_COUNT] = {2, 3, 4, 5, 6, 7, 8, 9};
-const bool PWM_CAPABLE[CHANNEL_COUNT] = {false, true, false, true, true, false, false, true};
+
+// CH1..CH8 → пины Arduino (см. WIRING.md)
+const uint8_t PIN_MAP[CHANNEL_COUNT] = {2, 3, 4, 5, 6, 11, 9, 10};
+// Аппаратный PWM UNO R3: D3, D5, D6, D9, D10, D11
+const bool PWM_CAPABLE[CHANNEL_COUNT] = {
+  false, true, false, true, true, true, true, true
+};
 
 enum ChannelMode : uint8_t { MODE_OFF = 0, MODE_ON, MODE_FREQ, MODE_PWM };
 
@@ -42,6 +49,7 @@ void setChannelStatic(uint8_t chIndex, bool on) {
   stopPwmHardware(chIndex);
   channelMode[chIndex] = on ? MODE_ON : MODE_OFF;
   freqHz[chIndex] = 0;
+  pwmDuty[chIndex] = 0;
   applyPinLevel(chIndex, on);
 }
 
@@ -53,13 +61,15 @@ void setChannelFreq(uint8_t chIndex, uint16_t hz) {
   }
   channelMode[chIndex] = MODE_FREQ;
   freqHz[chIndex] = hz;
+  pwmDuty[chIndex] = 0;
   lastToggleMs[chIndex] = millis();
   applyPinLevel(chIndex, false);
 }
 
 void setChannelPwm(uint8_t chIndex, uint8_t duty) {
   if (!isPwmCapable(chIndex)) {
-    Serial.println(F("ERR PWM channel"));
+    Serial.print(F("ERR PWM "));
+    Serial.println(chIndex + 1);
     return;
   }
   channelMode[chIndex] = (duty == 0) ? MODE_OFF : MODE_PWM;
@@ -78,15 +88,11 @@ void setChannelPwm(uint8_t chIndex, uint8_t duty) {
   Serial.println(duty);
 }
 
+// STAT: логический уровень на выводе Arduino, не состояние исполнительного устройства
 void sendStat() {
   Serial.print(F("STAT"));
   for (uint8_t i = 0; i < CHANNEL_COUNT; i++) {
-    bool level;
-    if (channelMode[i] == MODE_PWM && isPwmCapable(i)) {
-      level = pwmDuty[i] > 127;
-    } else {
-      level = digitalRead(pinForChannel(i)) == HIGH;
-    }
+    bool level = digitalRead(pinForChannel(i)) == HIGH;
     Serial.print(level ? F(",1") : F(",0"));
   }
   Serial.println();

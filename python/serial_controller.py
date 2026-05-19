@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Минимальный клиент управления 8 каналами Arduino UNO.
+Клиент управления 8 выходными каналами CH1..CH8 (Arduino UNO + ULN2803A).
 Требования: pip install pyserial
 """
 
@@ -61,7 +61,7 @@ class ArduinoChannelClient:
         return self._send_line("GET")
 
     def poll_status_loop(self, interval_s: float = 0.5) -> None:
-        print("Телеметрия (Ctrl+C для выхода):")
+        print("Опрос логического STAT (Ctrl+C для выхода):")
         try:
             while True:
                 for line in self.get_status():
@@ -73,26 +73,29 @@ class ArduinoChannelClient:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Управление 8 каналами Arduino (ULN2803) по Serial"
+        description="Управление выходными каналами CH1..CH8 (ULN2803) по Serial"
     )
     parser.add_argument("port", help="COM-порт, например COM3 или /dev/ttyUSB0")
     sub = parser.add_subparsers(dest="action", required=True)
 
-    p_on = sub.add_parser("on", help="Включить канал")
-    p_on.add_argument("channel", type=int)
-    p_off = sub.add_parser("off", help="Выключить канал")
-    p_off.add_argument("channel", type=int)
+    p_on = sub.add_parser("on", help="SET: включить выходной канал CH")
+    p_on.add_argument("channel", type=int, metavar="CH")
+    p_off = sub.add_parser("off", help="SET: выключить выходной канал CH")
+    p_off.add_argument("channel", type=int, metavar="CH")
 
-    p_freq = sub.add_parser("freq", help="Частотное переключение, Гц (0 = стоп)")
-    p_freq.add_argument("channel", type=int)
+    p_freq = sub.add_parser("freq", help="FREQ: меандр на любом CH, Гц (0 = стоп)")
+    p_freq.add_argument("channel", type=int, metavar="CH")
     p_freq.add_argument("hz", type=int)
 
-    p_pwm = sub.add_parser("pwm", help="ШИМ 0..255 (каналы 2,4,5,8)")
-    p_pwm.add_argument("channel", type=int)
+    p_pwm = sub.add_parser(
+        "pwm",
+        help="PWM: analogWrite 0..255 только CH2,4,5,6,7,8",
+    )
+    p_pwm.add_argument("channel", type=int, metavar="CH")
     p_pwm.add_argument("duty", type=int)
 
-    sub.add_parser("stat", help="Один запрос STAT")
-    sub.add_parser("monitor", help="Периодический опрос STAT")
+    sub.add_parser("stat", help="GET: один ответ STAT (логика на пинах)")
+    sub.add_parser("monitor", help="GET: периодический STAT")
 
     args = parser.parse_args()
     client = ArduinoChannelClient(args.port)
