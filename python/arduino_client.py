@@ -18,9 +18,142 @@ READ_TIMEOUT_S = 1.0
 CHANNEL_COUNT = 8
 PWM_CHANNELS = frozenset({2, 4, 5, 6, 7, 8})
 
+# Подсказки для авто-выбора порта Arduino / USB-UART (CH340, CP2102, FTDI…)
+ARDUINO_PORT_HINTS = (
+    "arduino",
+    "ch340",
+    "ch341",
+    "cp210",
+    "ftdi",
+    "usb-serial",
+    "usb serial",
+    "wch",
+    "1a86",
+    "10c4",
+    "0403",
+    "2341",  # Arduino VID
+    "serial",
+    "uno",
+    "mega",
+    "nano",
+)
+
+
+class SerialPortInfo:
+    __slots__ = ("device", "description", "hwid", "label")
+
+    def __init__(self, device: str, description: str, hwid: str) -> None:
+        self.device = device
+        self.description = description
+        self.hwid = hwid
+        self.label = f"{device} — {description}"
+
+
+def _com_sort_key(device: str) -> tuple[int, int | str]:
+    import re
+
+    match = re.search(r"COM(\d+)", device, re.IGNORECASE)
+    if match:
+        return (0, int(match.group(1)))
+    return (1, device)
+
+
+def is_port_available(device: str, probe_timeout: float = 0.12) -> bool:
+    """
+    Порт есть в системе?
+    - открывается → да;
+    - «Access is denied» / занят → да (не переключать на другой COM);
+    - «could not find» / нет устройства → нет (USB отключён).
+    """
+    try:
+        ser = serial.Serial(device, baudrate=BAUD, timeout=probe_timeout)
+        ser.close()
+        return True
+    except serial.SerialException as exc:
+        msg = str(exc).lower()
+        if any(
+            token in msg
+            for token in (
+                "access is denied",
+                "permission",
+                "busy",
+                "in use",
+                "отказано",
+                "занят",
+            )
+        ):
+            return True
+        if any(
+            token in msg
+            for token in (
+                "could not open port",
+                "file not found",
+                "no such file",
+                "cannot find",
+                "не найден",
+            )
+        ):
+            return False
+        return False
+    except OSError as exc:
+        if getattr(exc, "errno", None) in (13, 16):
+            return True
+        if getattr(exc, "errno", None) in (2,):
+            return False
+        return False
+    except ValueError:
+        return False
+
+
+def list_serial_port_infos(*, only_available: bool = False) -> list[SerialPortInfo]:
+    """COM-порты из системы; only_available=True — только открываемые сейчас."""
+    result: list[SerialPortInfo] = []
+    try:
+        found = list_ports.comports(include_links=True)
+    except TypeError:
+        found = list_ports.comports()
+
+    for port in found:
+        device = (port.device or "").strip()
+        if not device:
+            continue
+        if only_available and not is_port_available(device):
+            continue
+        desc = (port.description or "Serial").strip()
+        result.append(SerialPortInfo(device, desc, (port.hwid or "").strip()))
+
+    result.sort(key=lambda item: _com_sort_key(item.device))
+    return result
+
 
 def list_serial_ports() -> list[str]:
-    return [p.device for p in list_ports.comports()]
+    return [item.device for item in list_serial_port_infos()]
+
+
+def list_serial_port_labels() -> list[str]:
+    return [item.label for item in list_serial_port_infos()]
+
+
+def device_from_port_choice(choice: str) -> str:
+    """Из строки 'COM10 — USB-SERIAL CH340' вернуть 'COM10'."""
+    text = choice.strip()
+    if " — " in text:
+        return text.split(" — ", 1)[0].strip()
+    return text
+
+
+def guess_arduino_port(infos: list[SerialPortInfo]) -> str | None:
+    """Только USB-UART / Arduino; Bluetooth-COM не выбираем автоматически."""
+    if not infos:
+        return None
+    for info in infos:
+        desc = info.description.lower()
+        if "bluetooth" in desc:
+            continue
+        blob = f"{desc} {info.hwid}".lower()
+        if any(hint in blob for hint in ARDUINO_PORT_HINTS):
+            return info.device
+    return None
 
 
 def parse_stat_line(line: str) -> list[int] | None:

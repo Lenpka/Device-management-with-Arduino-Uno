@@ -14,8 +14,14 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import tkinter as tk
 from tkinter import messagebox, scrolledtext, ttk
 
-from arduino_client import CHANNEL_COUNT, PWM_CHANNELS
-from gui_common import ChannelController, UiWorker, format_stat, list_serial_ports
+from arduino_client import CHANNEL_COUNT, PWM_CHANNELS, device_from_port_choice
+from gui_common import (
+    PORT_SCAN_MS,
+    ChannelController,
+    UiWorker,
+    format_stat,
+    refresh_port_list,
+)
 
 POLL_MS = 500
 
@@ -29,6 +35,9 @@ class LightGuiApp:
         self.worker = UiWorker()
         self.ctrl = ChannelController(self._log, self._on_stat, self._set_connected)
         self._poll_job: str | None = None
+        self._port_scan_job: str | None = None
+        self._port_signature: tuple[str, ...] | None = None
+        self._connecting = False
         self._stat_labels: list[tk.Label] = []
         self._freq_vars: list[tk.StringVar] = []
         self._pwm_vars: list[tk.IntVar] = []
@@ -42,9 +51,12 @@ class LightGuiApp:
 
         ttk.Label(top, text="COM:").pack(side=tk.LEFT)
         self.port_var = tk.StringVar()
-        self.port_combo = ttk.Combobox(top, textvariable=self.port_var, width=14)
+        self.port_combo = ttk.Combobox(top, textvariable=self.port_var, width=42)
         self.port_combo.pack(side=tk.LEFT, padx=4)
-        ttk.Button(top, text="Обновить", command=self._refresh_ports).pack(side=tk.LEFT)
+        self.port_combo.bind("<Button-1>", lambda _e: self._refresh_ports(), add="+")
+        ttk.Button(top, text="Обновить", command=lambda: self._refresh_ports(force_log=True)).pack(
+            side=tk.LEFT
+        )
         self.btn_connect = ttk.Button(top, text="Подключить", command=self._toggle_connect)
         self.btn_connect.pack(side=tk.LEFT, padx=8)
         ttk.Button(top, text="Все OFF", command=self._all_off).pack(side=tk.LEFT)
@@ -87,7 +99,8 @@ class LightGuiApp:
             fill=tk.X, padx=8, pady=(0, 8)
         )
 
-        self._refresh_ports()
+        self._refresh_ports(force_log=True, auto_pick=True)
+        self._schedule_port_scan()
 
     def _add_channel(self, parent: ttk.Frame, ch: int, row: int, col: int) -> None:
         pwm = ch in PWM_CHANNELS
@@ -151,28 +164,62 @@ class LightGuiApp:
     def _apply_pwm(self, ch: int, var: tk.IntVar) -> None:
         self.ctrl.set_pwm(ch, int(var.get()), self.worker)
 
-    def _refresh_ports(self) -> None:
-        ports = list_serial_ports()
-        self.port_combo["values"] = ports
-        if ports and not self.port_var.get():
-            self.port_var.set(ports[0])
+    def _refresh_ports(self, *, force_log: bool = False, auto_pick: bool = False) -> None:
+        if self._connecting:
+            return
+        prev = self.port_var.get()
+        infos, labels, selected, log_msg, sig = refresh_port_list(
+            prev,
+            self._port_signature,
+            only_available=True,
+            auto_pick=auto_pick,
+        )
+        self._port_signature = sig
+        self.port_combo["values"] = labels
+        if selected != prev:
+            self.port_var.set(selected)
+        if log_msg and (force_log or log_msg.endswith("?")):
+            self._log(log_msg)
+        elif force_log and labels and not str(labels[0]).startswith("("):
+            self._log(log_msg or f"COM: доступно {len(labels)} порт(ов)")
+
+    def _schedule_port_scan(self) -> None:
+        self._stop_port_scan()
+        if not self.ctrl.connected and not self._connecting:
+            self._refresh_ports()
+            self._port_scan_job = self.root.after(PORT_SCAN_MS, self._schedule_port_scan)
+
+    def _stop_port_scan(self) -> None:
+        if self._port_scan_job:
+            self.root.after_cancel(self._port_scan_job)
+            self._port_scan_job = None
 
     def _toggle_connect(self) -> None:
         if self.ctrl.connected:
             self.ctrl.disconnect()
             return
-        port = self.port_var.get().strip()
+        self._stop_port_scan()
+        port = device_from_port_choice(self.port_var.get())
         if not port:
-            messagebox.showwarning("Порт", "Выберите COM-порт")
+            messagebox.showwarning("Порт", "Выберите или введите COM-порт (например COM10)")
+            self._schedule_port_scan()
             return
+        self._connecting = True
+        self._log(f"Подключение к {port}…")
         self.ctrl.connect(port, self.worker)
 
     def _set_connected(self, ok: bool) -> None:
+        self._connecting = False
         self.btn_connect.config(text="Отключить" if ok else "Подключить")
-        self.status_var.set(f"Подключено: {self.port_var.get()}" if ok else "Не подключено")
-        if not ok:
+        dev = device_from_port_choice(self.port_var.get())
+        self.status_var.set(f"Подключено: {dev}" if ok else "Не подключено")
+        if ok:
+            self._stop_port_scan()
+        else:
             self.poll_var.set(False)
             self._stop_poll()
+            self._refresh_ports(force_log=True)
+            self._schedule_port_scan()
 
     def _all_off(self) -> None:
         self.ctrl.all_off(self.worker)
@@ -223,6 +270,7 @@ class LightGuiApp:
 
     def _on_close(self) -> None:
         self._stop_poll()
+        self._stop_port_scan()
         self.ctrl.disconnect()
         self.root.destroy()
 

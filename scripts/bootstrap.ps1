@@ -1,8 +1,7 @@
-# Однократный запуск на новом ПК: uv → зависимости → GUI
-# Запуск: двойной щелчок START.bat или: powershell -File scripts\bootstrap.ps1
+# One-shot setup: install uv, sync deps, launch GUI
+# Run: START.bat  or  powershell -File scripts\bootstrap.ps1
 
 $ErrorActionPreference = "Stop"
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 $PythonDir = Join-Path $RepoRoot "python"
@@ -40,12 +39,12 @@ function Find-UvExe {
 function Ensure-Uv {
     $existing = Find-UvExe
     if ($existing) {
-        Write-Step "uv найден: $existing"
+        Write-Step "uv found: $existing"
         return $existing
     }
 
-    Write-Step "uv не найден — установка (официальный скрипт Astral)..."
-    Write-Host "Может потребоваться доступ в интернет." -ForegroundColor Yellow
+    Write-Step "uv not found - installing (astral.sh)..."
+    Write-Host "Internet access required." -ForegroundColor Yellow
 
     $installScript = Join-Path $env:TEMP "uv-install.ps1"
     Invoke-WebRequest -Uri "https://astral.sh/uv/install.ps1" -OutFile $installScript -UseBasicParsing
@@ -54,44 +53,51 @@ function Ensure-Uv {
     Refresh-UserPath
     $uv = Find-UvExe
     if (-not $uv) {
-        throw "uv не установился. Установите вручную: https://docs.astral.sh/uv/getting-started/installation/"
+        throw "uv install failed. See https://docs.astral.sh/uv/getting-started/installation/"
     }
-    Write-Host "uv установлен: $uv" -ForegroundColor Green
+    Write-Host "uv installed: $uv" -ForegroundColor Green
     return $uv
 }
 
 function Invoke-Uv {
-    param([string]$UvExe, [string[]]$Args)
-    & $UvExe @Args
-    if ($LASTEXITCODE -ne 0) {
-        throw "uv завершился с кодом $LASTEXITCODE: uv $($Args -join ' ')"
+    param(
+        [string]$UvExe,
+        [string[]]$UvArgs
+    )
+    & $UvExe @UvArgs
+    $code = $LASTEXITCODE
+    if ($code -ne 0) {
+        $cmdLine = $UvArgs -join " "
+        throw "uv failed with exit code ${code} (uv $cmdLine)"
     }
 }
 
 try {
     Write-Host "========================================" -ForegroundColor White
-    Write-Host "  Пульт CH1-CH8 · Arduino + ULN2803A" -ForegroundColor White
+    Write-Host "  CH1-CH8 control - Arduino + ULN2803A" -ForegroundColor White
     Write-Host "========================================" -ForegroundColor White
 
     $uvExe = Ensure-Uv
     Set-Location $PythonDir
 
-    Write-Step "Создание окружения и установка зависимостей (uv sync)..."
-    Write-Host "При первом запуске uv может скачать Python $(Get-Content .python-version -Raw)." -ForegroundColor Gray
-    Invoke-Uv $uvExe @("sync", "--group", "modern")
+    Write-Step "Creating venv and installing packages (uv sync)..."
+    $pyVer = (Get-Content -Path ".python-version" -Raw).Trim()
+    Write-Host "First run may download Python $pyVer" -ForegroundColor Gray
+    Invoke-Uv -UvExe $uvExe -UvArgs @("sync", "--group", "modern")
 
-    Write-Step "Запуск интерфейса..."
-    Write-Host "Перед работой: прошейте Arduino (firmware/multi_channel_driver/) и подключите USB." -ForegroundColor Yellow
+    Write-Step "Starting GUI..."
+    Write-Host "Flash Arduino first: firmware/multi_channel_driver/" -ForegroundColor Yellow
 
     try {
-        Invoke-Uv $uvExe @("run", "python", "gui_modern.py")
-    } catch {
-        Write-Host "Современный GUI недоступен, запуск лёгкого (tkinter)..." -ForegroundColor Yellow
-        Invoke-Uv $uvExe @("run", "python", "gui_light.py")
+        Invoke-Uv -UvExe $uvExe -UvArgs @("run", "python", "gui_modern.py")
+    }
+    catch {
+        Write-Host "Modern GUI failed, trying light GUI (tkinter)..." -ForegroundColor Yellow
+        Invoke-Uv -UvExe $uvExe -UvArgs @("run", "python", "gui_light.py")
     }
 }
 catch {
     Write-Host ""
-    Write-Host "ОШИБКА: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "ERROR: $($_.Exception.Message)" -ForegroundColor Red
     exit 1
 }
