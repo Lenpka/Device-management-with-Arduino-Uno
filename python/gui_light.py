@@ -43,6 +43,9 @@ class LightGuiApp:
         self._pwm_vars: list[tk.IntVar] = []
 
         self._build()
+        from present_access import bind_present_hotkey
+
+        bind_present_hotkey(self.root)
         self._pump()
 
     def _build(self) -> None:

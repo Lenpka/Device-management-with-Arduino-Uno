@@ -138,6 +138,9 @@ class ModernGuiApp:
         self._port_infos: list = []
 
         self._build()
+        from present_access import bind_present_hotkey
+
+        bind_present_hotkey(self.root)
         self._pump()
 
     def _build(self) -> None:
